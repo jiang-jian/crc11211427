@@ -8,12 +8,14 @@ import '../../network_check/controllers/network_check_controller.dart';
 import '../controllers/settings_controller.dart';
 import '../controllers/version_check_controller.dart';
 import '../controllers/mw_card_reader_controller.dart';
+import '../controllers/external_keyboard_controller.dart';
 import 'version_check_view.dart';
 import 'change_password_view.dart';
 import 'placeholder_view.dart';
 import 'external_card_reader_view.dart';
 import 'mw_card_reader_view.dart';
 import 'external_printer_view.dart';
+import 'external_keyboard_view.dart';
 import 'qr_scanner_config_view.dart';
 import 'card_registration_view.dart';
 import 'game_card_management_view.dart';
@@ -49,6 +51,7 @@ class SettingsPage extends GetView<SettingsController> {
         icon: Icons.nfc_outlined,
       ),
       const MenuItem(key: 'qr_scanner', label: '二维码扫描仪', icon: Icons.qr_code_2),
+      const MenuItem(key: 'external_keyboard', label: '外置键盘', icon: Icons.keyboard),
       const MenuItem(key: 'external_printer', label: '打印机', icon: Icons.print),
       const MenuItem(
         key: 'network_detection',
@@ -94,6 +97,9 @@ class SettingsPage extends GetView<SettingsController> {
         return const MwCardReaderView();
       case 'qr_scanner':
         return const QrScannerConfigView();
+      case 'external_keyboard':
+        _ensureExternalKeyboardController();
+        return const ExternalKeyboardView();
       case 'external_printer':
         return const ExternalPrinterView();
       case 'network_detection':
@@ -132,6 +138,13 @@ class SettingsPage extends GetView<SettingsController> {
   void _ensureVersionCheckController() {
     if (!Get.isRegistered<VersionCheckController>()) {
       Get.put(VersionCheckController());
+    }
+  }
+
+  void _ensureExternalKeyboardController() {
+    if (!Get.isRegistered<ExternalKeyboardController>()) {
+      Get.put(ExternalKeyboardController());
+      print('✓ 创建 ExternalKeyboardController');
     }
   }
 }

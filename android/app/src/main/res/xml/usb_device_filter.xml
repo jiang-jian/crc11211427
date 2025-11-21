@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- USB 键盘设备过滤器 -->
+    <!-- USB设备类3表示HID (Human Interface Device) -->
+    <usb-device class="3" subclass="1" protocol="1" />
+    
     <!-- USB打印机设备过滤器 -->
     <!-- USB设备类7表示打印机 -->
     <usb-device class="7" />
@@ -8,4 +12,3 @@
     <!-- USB设备类11表示CCID (Chip Card Interface Device) -->
     <usb-device class="11" />
 </resources>
-
