@@ -28,6 +28,12 @@ private var reader: Reader? = null
 private var usbManager: UsbManager? = null
 private val mainHandler = Handler(Looper.getMainLooper())
 
+// 卡片检测线程管理
+@Volatile
+private var isDetecting = false
+private var detectionThread: Thread? = null
+private val detectionLock = Object()
+
 companion object {
 private const val CHANNEL_NAME = "com.holox.ailand_pos/mw_card_reader"
 private const val ACTION_USB_PERMISSION = "com.holox.ailand_pos.USB_PERMISSION"
@@ -216,6 +222,9 @@ sendEvent("error", mapOf("message" to "连接异常: ${e.message}"))
 // 关闭读卡器
 private fun closeReader(result: Result) {
 try {
+// 先停止检测线程
+stopDetectionThread()
+
 reader?.let {
 it.closeReader()
 reader = null
@@ -229,6 +238,9 @@ result.error("ERROR", "关闭读卡器失败: ${e.message}", null)
 // 关闭读卡器(内部使用)
 private fun closeReader() {
 try {
+// 先停止检测线程
+stopDetectionThread()
+
 reader?.closeReader()
 reader = null
 } catch (e: Exception) {
@@ -329,17 +341,38 @@ result.error("ERROR", "检测卡片失败: ${e.message}", null)
 // 循环检测 M1 卡片(用于自动识别)
 private fun startCardDetection(result: Result) {
 try {
-reader?.let { r ->
-// 在后台线程循环检测
-Thread {
+if (reader == null) {
+result.error("NO_READER", "读卡器未连接", null)
+return
+}
+
+// 检查是否已经在检测中
+synchronized(detectionLock) {
+if (isDetecting) {
+result.success(true)
+return
+}
+isDetecting = true
+}
+
+// 创建检测线程
+detectionThread = Thread {
 try {
-while (true) {
+while (isDetecting) {
 try {
+// 检查 reader 是否仍然有效
+val currentReader = reader
+if (currentReader == null || !isDetecting) {
+break
+}
+
 // 尝试打开卡片 (TypeA)
-val uid = r.openCard(0)
-if (uid != null && uid.isNotEmpty()) {
+val uid = currentReader.openCard(0)
+if (uid != null && uid.isNotEmpty() && isDetecting) {
 // 检测成功，发送事件
 mainHandler.post {
+if (isDetecting) {
+try {
 channel.invokeMethod("onEvent", mapOf(
 "event" to "card_detected",
 "data" to mapOf(
@@ -347,35 +380,89 @@ channel.invokeMethod("onEvent", mapOf(
 "type" to "MIFARE Classic"
 )
 ))
+} catch (e: Exception) {
+// 忽略发送事件错误
 }
+}
+}
+
 // 关闭卡片
 try {
-r.halt()
+currentReader.halt()
 } catch (e: Exception) {
 // 忽略 halt 错误
 }
-Thread.sleep(500) // 避免频繁检测
-}
-} catch (e: Exception) {
-// 无卡或检测失败，继续循环
+
+// 避免频繁检测
+Thread.sleep(500)
+} else {
+// 无卡，短暂休眠
 Thread.sleep(300)
 }
-}
 } catch (e: InterruptedException) {
-// 线程被中断，停止检测
-}
-}.start()
-result.success(true)
-} ?: result.error("NO_READER", "读卡器未连接", null)
+// 线程被中断，退出循环
+break
 } catch (e: Exception) {
+// 检测失败，继续循环
+if (isDetecting) {
+Thread.sleep(300)
+} else {
+break
+}
+}
+}
+} catch (e: Exception) {
+// 线程异常退出
+} finally {
+// 清理状态
+synchronized(detectionLock) {
+isDetecting = false
+detectionThread = null
+}
+}
+}
+
+// 启动线程
+detectionThread?.start()
+result.success(true)
+} catch (e: Exception) {
+synchronized(detectionLock) {
+isDetecting = false
+detectionThread = null
+}
 result.error("ERROR", "启动卡片检测失败: ${e.message}", null)
 }
 }
 
 // 停止卡片检测
 private fun stopCardDetection(result: Result) {
-// 此处简化实现，实际应该维护检测线程的引用以便停止
+stopDetectionThread()
 result.success(true)
+}
+
+// 停止检测线程(内部方法)
+private fun stopDetectionThread() {
+synchronized(detectionLock) {
+if (!isDetecting) {
+return
+}
+
+// 设置停止标志
+isDetecting = false
+
+// 中断线程
+detectionThread?.let { thread ->
+try {
+thread.interrupt()
+// 等待线程结束(最多500ms)
+thread.join(500)
+} catch (e: Exception) {
+// 忽略中断异常
+} finally {
+detectionThread = null
+}
+}
+}
 }
 
 // 打开M1卡

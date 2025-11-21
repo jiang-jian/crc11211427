@@ -30,9 +30,9 @@ class MwCardReaderController extends GetxController {
   }
 
   @override
-  void onClose() {
-    stopCardDetection();
-    closeReader();
+  void onClose() async {
+    await stopCardDetection();
+    await closeReader();
     super.onClose();
   }
 
