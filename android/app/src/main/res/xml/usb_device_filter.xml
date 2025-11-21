@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- USB 键盘设备过滤器 -->
-    <!-- USB设备类3表示HID (Human Interface Device) -->
+    <!-- USB 标准键盘设备过滤器 -->
+    <!-- class=3: HID, subclass=1: Boot, protocol=1: Keyboard -->
     <usb-device class="3" subclass="1" protocol="1" />
+    
+    <!-- USB 数字键盘设备过滤器 -->
+    <!-- class=3: HID, subclass=1: Boot, protocol=2: Numpad -->
+    <usb-device class="3" subclass="1" protocol="2" />
     
     <!-- USB打印机设备过滤器 -->
     <!-- USB设备类7表示打印机 -->
