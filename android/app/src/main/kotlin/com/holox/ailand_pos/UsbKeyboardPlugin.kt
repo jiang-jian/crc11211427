@@ -45,18 +45,11 @@ class UsbKeyboardPlugin : FlutterPlugin, MethodCallHandler {
         private const val EVENT_CHANNEL_NAME = "com.holox.ailand_pos/usb_keyboard_events"
         private const val ACTION_USB_PERMISSION = "com.holox.ailand_pos.USB_KEYBOARD_PERMISSION"
         
-        // HID 键盘的接口类型标识
+        // HID 键盘的接口类型标识（仍用于 getKeyboardType 方法）
         private const val USB_CLASS_HID = 3
         private const val USB_SUBCLASS_BOOT = 1
         private const val USB_PROTOCOL_KEYBOARD = 1
         private const val USB_PROTOCOL_NUMPAD = 2
-        
-        // 专业扫描器厂商黑名单（排除这些厂商的设备）
-        private val EXCLUSIVE_SCANNER_VENDORS = listOf(
-            0x05e0,  // Symbol Technologies (Zebra旗下) - 专业扫描器
-            0x0c2e,  // Honeywell (霍尼韦尔) - 专业扫描器
-            0x0536   // Hand Held Products (Honeywell旗下) - 专业扫描器
-        )
     }
     
     // USB 广播接收器
@@ -303,47 +296,10 @@ class UsbKeyboardPlugin : FlutterPlugin, MethodCallHandler {
     
     /**
      * 判断是否为键盘设备
-     * 三重过滤：协议检查 + 产品名称排除 + 专业扫描器厂商排除
+     * 使用统一的设备分类器确保与其他插件一致
      */
     private fun isKeyboardDevice(device: UsbDevice): Boolean {
-        // 第一层：检查是否有键盘协议
-        var hasKeyboardProtocol = false
-        for (i in 0 until device.interfaceCount) {
-            val usbInterface = device.getInterface(i)
-            
-            // 检查是否为 HID 键盘协议
-            if (usbInterface.interfaceClass == USB_CLASS_HID &&
-                usbInterface.interfaceSubclass == USB_SUBCLASS_BOOT &&
-                (usbInterface.interfaceProtocol == USB_PROTOCOL_KEYBOARD ||
-                 usbInterface.interfaceProtocol == USB_PROTOCOL_NUMPAD)) {
-                hasKeyboardProtocol = true
-                break
-            }
-        }
-        
-        // 如果不是键盘协议，直接返回false
-        if (!hasKeyboardProtocol) {
-            return false
-        }
-        
-        // 第二层：排除产品名称包含扫描器关键词的设备
-        val productName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            device.productName?.lowercase() ?: ""
-        } else {
-            ""
-        }
-        val scannerKeywords = listOf("scanner", "barcode", "qr", "reader", "scan")
-        if (scannerKeywords.any { productName.contains(it) }) {
-            return false  // 产品名包含扫描器关键词，不是键盘
-        }
-        
-        // 第三层：排除专业扫描器厂商的设备
-        if (device.vendorId in EXCLUSIVE_SCANNER_VENDORS) {
-            return false  // 专业扫描器厂商，不是键盘
-        }
-        
-        // 通过所有过滤，确认是键盘设备
-        return true
+        return DeviceClassifier.isKeyboard(device)
     }
     
     /**

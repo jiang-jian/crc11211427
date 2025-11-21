@@ -39,32 +39,6 @@ class BarcodeScannerPlugin : FlutterPlugin, MethodCallHandler {
         private const val TAG = "BarcodeScanner"
         private const val CHANNEL_NAME = "com.holox.ailand_pos/barcode_scanner"
         private const val ACTION_USB_PERMISSION = "com.holox.ailand_pos.USB_BARCODE_SCANNER_PERMISSION"
-        
-        // USB HID设备类代码
-        private const val USB_CLASS_HID = 3  // Human Interface Device
-        
-        /**
-         * 常见条码扫描器厂商ID列表
-         * 包括得力、霍尼韦尔、斑马、讯宝等主流品牌
-         */
-        private val KNOWN_SCANNER_VENDORS = listOf(
-            // 得力（Deli）
-            0x05e0,  // Symbol Technologies (Zebra收购)
-            0x0c2e,  // Honeywell (霍尼韦尔)
-            0x0536,  // Hand Held Products (Honeywell旗下)
-            0x1f3a,  // Allwinner Technology (全志科技，部分扫描器使用)
-            0x1a86,  // QinHeng Electronics (沁恒电子，CH340芯片)
-            0x0483,  // STMicroelectronics (意法半导体)
-            0x1a40,  // Terminus Technology (泰硕电子，USB Hub常用)
-            0x2687,  // Fitbit (某些扫描器使用相同芯片)
-            0x05ac,  // Apple (部分扫描器兼容)
-            // 通用USB HID设备
-            0x04d9,  // Holtek Semiconductor (合泰半导体)
-            0x046d,  // Logitech (罗技，部分扫描枪)
-            0x062a,  // MosArt Semiconductor (部分扫描器)
-            0x258a,  // SINO WEALTH (中颖电子)
-            0x04b4,  // Cypress Semiconductor (赛普拉斯)
-        )
     }
     
     // USB权限接收器
@@ -106,7 +80,15 @@ class BarcodeScannerPlugin : FlutterPlugin, MethodCallHandler {
                         intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
                     }
                     Log.d(TAG, "USB device attached: ${device?.deviceName}")
-                    channel.invokeMethod("onDeviceAttached", null)
+                    // 只通知扫描器设备的插入事件
+                    device?.let {
+                        if (isScannerDevice(it)) {
+                            Log.d(TAG, "Scanner device attached: ${it.deviceName}")
+                            channel.invokeMethod("onDeviceAttached", null)
+                        } else {
+                            Log.d(TAG, "Non-scanner device attached, ignoring: ${it.deviceName}")
+                        }
+                    }
                 }
                 UsbManager.ACTION_USB_DEVICE_DETACHED -> {
                     val device: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -116,7 +98,15 @@ class BarcodeScannerPlugin : FlutterPlugin, MethodCallHandler {
                         intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
                     }
                     Log.d(TAG, "USB device detached: ${device?.deviceName}")
-                    channel.invokeMethod("onDeviceDetached", null)
+                    // 只通知扫描器设备的拔出事件
+                    device?.let {
+                        if (isScannerDevice(it)) {
+                            Log.d(TAG, "Scanner device detached: ${it.deviceName}")
+                            channel.invokeMethod("onDeviceDetached", null)
+                        } else {
+                            Log.d(TAG, "Non-scanner device detached, ignoring: ${it.deviceName}")
+                        }
+                    }
                 }
             }
         }
@@ -227,41 +217,8 @@ class BarcodeScannerPlugin : FlutterPlugin, MethodCallHandler {
      * 判断是否为条码扫描器设备
      */
     private fun isScannerDevice(device: UsbDevice): Boolean {
-        // 方法1: 检查接口类（HID设备）
-        for (i in 0 until device.interfaceCount) {
-            val usbInterface = device.getInterface(i)
-            // HID接口 + 已知厂商
-            if (usbInterface.interfaceClass == USB_CLASS_HID && 
-                device.vendorId in KNOWN_SCANNER_VENDORS) {
-                Log.d(TAG, "Device ${device.deviceName} is a HID scanner (vendor: 0x${device.vendorId.toString(16)})")
-                return true
-            }
-            // 任何HID接口都可能是扫描器（宽松匹配）
-            if (usbInterface.interfaceClass == USB_CLASS_HID) {
-                Log.d(TAG, "Device ${device.deviceName} is a HID device, likely a scanner")
-                return true
-            }
-        }
-        
-        // 方法2: 检查已知厂商ID
-        if (device.vendorId in KNOWN_SCANNER_VENDORS) {
-            Log.d(TAG, "Device ${device.deviceName} is from known scanner vendor: 0x${device.vendorId.toString(16)}")
-            return true
-        }
-        
-        // 方法3: 通过产品名称关键词判断
-        val productName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            device.productName?.lowercase() ?: ""
-        } else {
-            ""
-        }
-        val scannerKeywords = listOf("scanner", "barcode", "qr", "reader", "scan")
-        if (scannerKeywords.any { productName.contains(it) }) {
-            Log.d(TAG, "Device ${device.deviceName} is likely a scanner (by product name)")
-            return true
-        }
-        
-        return false
+        // 使用统一的设备分类器确保与其他插件一致
+        return DeviceClassifier.isScanner(device)
     }
     
     /**
